@@ -832,6 +832,39 @@ def stop_sound():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/play_animation", methods=["POST"])
+
+def play_animation():
+    """
+    Reproduce o animație pe robotul NAO.
+    Parametri POST:
+      - animation: Numele animației de redat.
+    """
+    if not session:
+        return jsonify({"error": "Conexiune la robot eșuată"}), 500
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Datele JSON nu au fost trimise corect"}), 400
+
+    animation = data.get("animation")
+
+    if not animation:
+        return jsonify({"error": "Numele animației nu a fost specificat"}), 400
+
+    try:
+        behavior_manager = session.service("ALBehaviorManager")
+        if behavior_manager.isBehaviorInstalled(animation):
+            if not behavior_manager.isBehaviorRunning(animation):
+                behavior_manager.startBehavior(animation)
+                return jsonify({"status": "Animația a fost redată"})
+            else:
+                return jsonify({"status": "Animația este deja în execuție"})
+        else:
+            return jsonify({"error": "Animația {animation} nu este instalată"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # try:
