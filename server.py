@@ -714,11 +714,57 @@ def robot_pose_2d():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/robot_pose_3d_nou", methods=["GET"])
-def robot_pose_3d():
+@app.route("/robot_pose_2d_video", methods=["GET"])
+def robot_pose_2d_video():
+
+    if not session:
+        return jsonify({"error": "Conexiune la robot eșuată"}), 500
+
+    try:
+        # Obține serviciul ALMotion
+        motion_service = session.service("ALMotion")
+
+        # Listează articulațiile robotului
+        joint_names = motion_service.getBodyNames("Body")
+
+        # Obține pozițiile articulațiilor în coordonate spațiale (world coordinates)
+        joint_positions = []
+        for joint in joint_names:
+            position = motion_service.getPosition(joint, 1, True)  # 1 = world frame
+            joint_positions.append(position[:2])  # X, Y
+
+        # Conversie în array pentru procesare ușoară
+        joint_positions = np.array(joint_positions)
+
+        # Pregătește graficul 2D
+        fig, ax = plt.subplots()
+        ax.scatter(joint_positions[:, 0], joint_positions[:, 1], c='red', label='Articulații')
+        for i, joint in enumerate(joint_names):
+            ax.text(joint_positions[i, 0], joint_positions[i, 1], joint, fontsize=8)
+
+        # Configurează axele graficului
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_title("Reprezentarea 2D a poziției robotului NAO")
+
+        # Salvează graficul într-un buffer de memorie
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+
+        # Trimite graficul ca răspuns HTTP
+        return send_file(buf, mimetype='image/png')
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/robot_pose_3d_video", methods=["GET"])
+def robot_pose_3d_video():
     """
-    Generează o reprezentare 3D a poziției curente a robotului NAO.
-    Returnează un grafic 3D care arată pozițiile articulațiilor robotului.
+    Generează un videoclip 3D animat al pozițiilor articulațiilor robotului NAO.
+    Returnează un videoclip 3D animat care arată pozițiile articulațiilor robotului.
     """
     if not session:
         return jsonify({"error": "Conexiune la robot eșuată"}), 500
@@ -758,13 +804,13 @@ def robot_pose_3d():
         for i in range(len(joint_positions) - 1):
             ax.plot([joint_positions[i, 0], joint_positions[i + 1, 0]],
                     [joint_positions[i, 1], joint_positions[i + 1, 1]],
-                    [joint_positions[i, 2], joint_positions[i + 1, 2]], c='gray') # Linie gri între articulații pentru a reprezenta scheletul robotului NAO
+                    [joint_positions[i, 2], joint_positions[i + 1, 2]], c='gray')
 
         # Salvează graficul într-un buffer de memorie
         buf = io.BytesIO()
         plt.savefig(buf, format='png')
         buf.seek(0)
-        plt.close(fig) # Închideți figura pentru a elibera memoria
+        plt.close(fig)
 
         # Trimite graficul ca răspuns HTTP
         return send_file(buf, mimetype='image/png')
