@@ -866,8 +866,6 @@ def play_animation():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-#ahdgs,gdk,adh,hl
-
 
 # try:
 #     behavior_manager = session.service("ALBehaviorManager")
