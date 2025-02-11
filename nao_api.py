@@ -39,8 +39,6 @@ def control_robot(joystick):
     try:
         while True:
             for event in pygame.event.get():
-                print(event)
-
                 # Citire axe joystick
                 x_axis = joystick.get_axis(0)  # Stânga/Dreapta
                 y_axis = joystick.get_axis(1)  # Față/Spate

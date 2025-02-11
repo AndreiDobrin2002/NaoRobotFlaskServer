@@ -1016,6 +1016,54 @@ def stop_audio():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/start_recording", methods=["POST"])
+def start_recording():
+    """
+    Pornește înregistrarea audio pe robotul NAO.
+    Fișierul va fi salvat pe robot la /home/nao/recorded_audio.wav.
+    """
+    if not session:
+        return jsonify({"error": "Conexiune la robot eșuată"}), 500
+
+    try:
+        audio_recorder = session.service("ALAudioRecorder")
+        audio_recorder.startMicrophonesRecording("/home/nao/recorded_audio.wav", "wav", 16000, [1, 0, 0, 0])
+        return jsonify({"status": "Înregistrare audio pornită"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/stop_and_save_recording", methods=["POST"])
+def stop_and_save_recording():
+    """
+    Oprește înregistrarea audio și salvează fișierul pe robot, apoi îl descarcă pe computer.
+    """
+    if not session:
+        return jsonify({"error": "Conexiune la robot eșuată"}), 500
+
+    try:
+        audio_recorder = session.service("ALAudioRecorder")
+        audio_recorder.stopMicrophonesRecording()
+
+        # Calea fișierului audio pe robot
+        robot_audio_file = "/home/nao/recorded_audio.wav"
+        local_audio_file = "recorded_audio.wav"  # Unde îl salvezi pe computer
+
+        # Conectează-te la robot prin SFTP
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(NAO_IP, username=ROBOT_USERNAME, password=ROBOT_PASSWORD)
+
+        sftp = ssh.open_sftp()
+        sftp.get(robot_audio_file, local_audio_file)  # Transferă fișierul pe computer
+        sftp.close()
+        ssh.close()
+
+        return jsonify({"status": "Înregistrarea a fost salvată pe computer"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # try:
 #     behavior_manager = session.service("ALBehaviorManager")
 #     installed_behaviors = behavior_manager.getInstalledBehaviors()
