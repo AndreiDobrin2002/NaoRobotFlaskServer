@@ -6,12 +6,18 @@ import threading
 import time
 from flask import Flask, request, jsonify, Response, send_file
 import io
+import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from werkzeug.utils import secure_filename
+import paramiko  # Pentru transferul fișierelor către robot
 
 
 NAO_IP = "192.168.0.1"  # Adresa IP a robotului
 NAO_PORT = 9559         # Portul NAOqi (în mod normal 9559)
+ROBOT_USERNAME = "nao"
+ROBOT_PASSWORD = "nao"  # Setează parola corectă
+ROBOT_AUDIO_PATH = "/home/nao/audio/"  # Director unde salvăm fișierele pe robot
 
 # Inițializăm Flask
 app = Flask(__name__)
@@ -942,38 +948,62 @@ def robot_stiffness():
         return jsonify({"error": "Metoda HTTP nu este suportată"}), 405
 
 
-@app.route("/play_sound", methods=["POST"])
-def play_sound():
+# Endpoint pentru încărcarea și redarea unui fișier audio
+@app.route("/upload_and_play", methods=["POST"])
+def upload_and_play():
     """
-    Reproduce un fișier audio pe robotul NAO.
-    Parametri POST:
-      - file: Calea către fișierul audio de redat.
+    Încărcă un fișier audio pe robot și îl redă.
+    Trimite fișierul prin 'multipart/form-data' cu key-ul 'file'.
     """
-    if not session:
-        return jsonify({"error": "Conexiune la robot eșuată"}), 500
+    if "file" not in request.files:
+        return jsonify({"error": "Fișierul nu a fost trimis"}), 400
 
-    data = request.get_json()
+    file = request.files["file"]
 
-    if not data:
-        return jsonify({"error": "Datele JSON nu au fost trimise corect"}), 400
+    if file.filename == "":
+        return jsonify({"error": "Numele fișierului nu este valid"}), 400
 
-    file_path = data.get("file")
+    # Salvăm temporar fișierul pe server
+    filename = secure_filename(file.filename)
+    temp_path = os.path.join("C:\\Users\\Andrei\\Desktop\\Proiect Licenta\\temp", filename)  # Creează un folder "temp"
+    file.save(temp_path)
 
-    if not file_path:
-        return jsonify({"error": "Calea către fișierul audio nu a fost specificată"}), 400
+    # Transferăm fișierul pe robot
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(NAO_IP, username=ROBOT_USERNAME, password=ROBOT_PASSWORD)
 
+        sftp = ssh.open_sftp()
+
+        try:
+            sftp.stat(ROBOT_AUDIO_PATH)  # Verifică dacă există directorul pe robot
+        except IOError:
+            sftp.mkdir(ROBOT_AUDIO_PATH)  # Dacă nu există, creează-l
+
+        remote_path = os.path.join(ROBOT_AUDIO_PATH, filename)
+        sftp.put(temp_path, remote_path)
+        sftp.close()
+        ssh.close()
+    except Exception as e:
+        return jsonify({"error": "Eroare la transferul fișierului: "+str(e)}), 500
+
+    # Ștergem fișierul local
+    os.remove(temp_path)
+
+    # Redăm fișierul pe robot
     try:
         audio_player = session.service("ALAudioPlayer")
-        audio_player.playFile(file_path)
-        return jsonify({"status": "Fișierul audio a fost redat"})
+        audio_player.playFile(remote_path)
+        return jsonify({"status": "Fișierul audio a fost redat"}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Eroare la redare: {str(e)}"}), 500
 
 
-@app.route("/stop_sound", methods=["POST"])
-def stop_sound():
+@app.route("/stop_audio", methods=["POST"])
+def stop_audio():
     """
-    Oprește redarea fișierului audio pe robotul NAO.
+    Oprește redarea tuturor fișierelor audio de pe robotul NAO.
     """
     if not session:
         return jsonify({"error": "Conexiune la robot eșuată"}), 500
@@ -981,42 +1011,7 @@ def stop_sound():
     try:
         audio_player = session.service("ALAudioPlayer")
         audio_player.stopAll()
-        return jsonify({"status": "Redarea fișierului audio a fost oprită"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/play_animation", methods=["POST"])
-
-def play_animation():
-    """
-    Reproduce o animație pe robotul NAO.
-    Parametri POST:
-      - animation: Numele animației de redat.
-    """
-    if not session:
-        return jsonify({"error": "Conexiune la robot eșuată"}), 500
-
-    data = request.get_json()
-
-    if not data:
-        return jsonify({"error": "Datele JSON nu au fost trimise corect"}), 400
-
-    animation = data.get("animation")
-
-    if not animation:
-        return jsonify({"error": "Numele animației nu a fost specificat"}), 400
-
-    try:
-        behavior_manager = session.service("ALBehaviorManager")
-        if behavior_manager.isBehaviorInstalled(animation):
-            if not behavior_manager.isBehaviorRunning(animation):
-                behavior_manager.startBehavior(animation)
-                return jsonify({"status": "Animația a fost redată"})
-            else:
-                return jsonify({"status": "Animația este deja în execuție"})
-        else:
-            return jsonify({"error": "Animația {animation} nu este instalată"}), 400
+        return jsonify({"status": "Redarea audio a fost oprită"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
