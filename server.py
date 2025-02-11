@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import qi
+from naoqi import ALProxy
 import numpy as np
 import cv2
 import threading
@@ -11,6 +12,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from werkzeug.utils import secure_filename
 import paramiko  # Pentru transferul fișierelor către robot
+import pygame
+import requests
 
 
 NAO_IP = "192.168.0.1"  # Adresa IP a robotului
@@ -1062,6 +1065,152 @@ def stop_and_save_recording():
         return jsonify({"status": "Înregistrarea a fost salvată pe computer"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# Conexiunea la Nao
+motion_proxy = ALProxy("ALMotion", NAO_IP, NAO_PORT)
+posture_proxy = ALProxy("ALRobotPosture", NAO_IP, NAO_PORT)
+
+# Prag pentru a evita mișcări involuntare ale joystick-ului
+DEAD_ZONE = 0.1
+
+
+# Variabile globale pentru a controla rularea manuală
+control_thread = None
+is_controlling = False
+
+# D-pad butoane
+D_PAD_UP = 11
+D_PAD_DOWN = 12
+D_PAD_LEFT = 13
+D_PAD_RIGHT = 14
+
+# Funcție pentru a inițializa controller-ul
+def init_controller():
+    pygame.init()
+    pygame.joystick.init()
+
+    if pygame.joystick.get_count() == 0:
+        print("Nu există controllere conectate!")
+        exit()
+
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+    print("Controller conectat: {joystick.get_name()}")
+    return joystick
+
+# Funcție pentru a apela cele patru endpointuri
+def call_endpoint(direction):
+    url_mapping = {
+        "up": "http://127.0.0.1:5000/hello",
+        "down": "http://127.0.0.1:5000/scratch_head",
+        "left": "http://127.0.0.1:5000/tai_chi",
+        "right": "http://127.0.0.1:5000/bow",
+    }
+
+    if direction in url_mapping:
+        try:
+            response = requests.post(url_mapping[direction])
+            if response.status_code == 200:
+                print("Apel la {direction} a fost realizat cu succes.")
+            else:
+                print("Eroare la apelul {direction}: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print("Eroare la apelul {direction}: {e}")
+
+# Funcție pentru a controla robotul pe baza input-ului
+def control_robot():
+    joystick = init_controller()
+
+    # Activează controlul motoriilor
+    motion_proxy.wakeUp()
+    posture_proxy.goToPosture("StandInit", 0.5)  # Poziție inițială
+
+    try:
+        while is_controlling:
+            for event in pygame.event.get():
+                # Citire axe joystick
+                x_axis = joystick.get_axis(0)  # Stânga/Dreapta
+                y_axis = joystick.get_axis(1)  # Față/Spate
+                head_x_axis = joystick.get_axis(2)  # Joystick drept stânga/dreapta
+                head_y_axis = joystick.get_axis(3)  # Joystick drept sus/jos
+
+                # Aplică DEAD_ZONE pentru a evita zgomotul
+                x_axis = x_axis if abs(x_axis) > DEAD_ZONE else 0
+                y_axis = y_axis if abs(y_axis) > DEAD_ZONE else 0
+                head_x_axis = head_x_axis if abs(head_x_axis) > DEAD_ZONE else 0
+                head_y_axis = head_y_axis if abs(head_y_axis) > DEAD_ZONE else 0
+
+                # Calcul viteză de mers în funcție de axa verticală
+                forward_speed = -y_axis * 0.9  # Valoare negativă = mers înainte
+
+                # Calcul viteză de rotație doar pe axa X
+                turn_speed = -x_axis * 0.9  # Rotire stânga/dreapta
+
+                # Control cap
+                motion_proxy.setAngles("HeadYaw", -head_x_axis * 2.0, 0.1)  # Rotire cap stânga/dreapta
+                motion_proxy.setAngles("HeadPitch", head_y_axis * 0.7, 0.1)  # Ridicare/coborâre cap
+
+                # Aplică vitezele la robot
+                motion_proxy.setWalkTargetVelocity(forward_speed, 0.0, turn_speed, 0.5)
+                print("Forward speed: {forward_speed}, Turn speed: {turn_speed}, HeadYaw: {head_x_axis}, HeadPitch: {head_y_axis}")
+
+                # Apăsare butoane
+                if event.type == pygame.JOYBUTTONDOWN:
+                    if event.button == 0:  # Butonul X
+                        motion_proxy.rest()  # Robotul intră în repaus
+                    elif event.button == 1:  # Butonul O
+                        posture_proxy.goToPosture("StandInit", 0.5)
+                    elif event.button == 2:  # Butonul pătrat
+                        posture_proxy.goToPosture("Sit", 0.5)
+                    elif event.button == 3:  # Butonul triunghi
+                        posture_proxy.goToPosture("StandZero", 0.5)
+
+                    if event.button == D_PAD_UP:
+                        call_endpoint("up")
+                    elif event.button == D_PAD_DOWN:
+                        call_endpoint("down")
+                    elif event.button == D_PAD_LEFT:
+                        call_endpoint("left")
+                    elif event.button == D_PAD_RIGHT:
+                        call_endpoint("right")
+
+    except KeyboardInterrupt:
+        print("Controlul robotului oprit.")
+        motion_proxy.rest()  # Oprește robotul în siguranță
+    finally:
+        pygame.quit()
+
+# Endpoint pentru a începe controlul manual
+@app.route("/manual_control/start", methods=["POST"])
+def start_manual_control():
+    global control_thread, is_controlling
+
+    if is_controlling:
+        return jsonify({"error": "Controlul manual este deja activ"}), 400
+
+    # Setăm flag-ul pentru control
+    is_controlling = True
+    control_thread = threading.Thread(target=control_robot)
+    control_thread.start()
+
+    return jsonify({"message": "Control manual a fost pornit"}), 200
+
+
+# Endpoint pentru a opri controlul manual
+@app.route("/manual_control/stop", methods=["POST"])
+def stop_manual_control():
+    global is_controlling, control_thread
+
+    if not is_controlling:
+        return jsonify({"error": "Controlul manual nu este activ"}), 400
+
+    # Setăm flag-ul pentru oprire
+    is_controlling = False
+    control_thread.join()  # Așteptăm să termine thread-ul curent
+    motion_proxy.rest()  # Oprește robotul în siguranță
+
+    return jsonify({"message": "Control manual a fost oprit"}), 200
 
 
 # try:
