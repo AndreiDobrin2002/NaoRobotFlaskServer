@@ -11,6 +11,7 @@ from werkzeug.utils import secure_filename
 import paramiko  # Pentru transferul fișierelor către robot
 import pygame
 import requests
+from flask_cors import CORS
 
 
 NAO_IP = "192.168.0.1"  # Adresa IP a robotului
@@ -21,6 +22,7 @@ ROBOT_AUDIO_PATH = "/home/nao/audio/"  # Director unde salvăm fișierele pe rob
 
 # Inițializăm Flask
 app = Flask(__name__)
+CORS(app)  # ✅ Activează accesul din React
 
 # Configurăm sesiunea cu robotul
 try:
@@ -664,51 +666,6 @@ def robot_velocity():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/robot_stiffness", methods=["GET", "POST"])
-def robot_stiffness():
-    """
-    Setează sau obține rigiditatea articulațiilor robotului NAO.
-    """
-    if not session:
-        return jsonify({"error": "Conexiune la robot eșuată"}), 500
-
-    if request.method == "GET":
-        try:
-            # Obține serviciul ALMotion
-            motion_service = session.service("ALMotion")
-
-            # Obține rigiditatea actuală a robotului
-            stiffnesses = motion_service.getStiffnesses("Body")
-
-            return jsonify(stiffnesses)
-
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    elif request.method == "POST":
-        try:
-            data = request.json
-            stiffness = data.get("stiffness", 1.0)
-
-            # Validăm valoarea rigidității
-            if not isinstance(stiffness, (int, float)) or stiffness < 0 or stiffness > 1:
-                return jsonify({"error": "Valoarea rigidității trebuie să fie un număr între 0 și 1"}), 400
-
-            # Obține serviciul ALMotion
-            motion_service = session.service("ALMotion")
-
-            # Setează rigiditatea pentru toate articulațiile robotului
-            motion_service.setStiffnesses("Body", stiffness)
-
-            return jsonify({"status": "Rigiditatea articulațiilor a fost setată la {}".format(stiffness)})
-
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    else:
-        return jsonify({"error": "Metoda HTTP nu este suportată"}), 405
 
 
 # Endpoint pentru încărcarea și redarea unui fișier audio
