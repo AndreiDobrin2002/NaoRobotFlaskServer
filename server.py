@@ -6,10 +6,7 @@ import cv2
 import threading
 import time
 from flask import Flask, request, jsonify, Response, send_file
-import io
 import os
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from werkzeug.utils import secure_filename
 import paramiko  # Pentru transferul fișierelor către robot
 import pygame
@@ -663,30 +660,6 @@ def robot_velocity():
         return jsonify({
             "linear_velocity": velocity[0],
             "angular_velocity": velocity[1]
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/robot_acceleration", methods=["GET"])
-def robot_acceleration():
-    """
-    Returnează accelerația actuală a robotului NAO.
-    """
-    if not session:
-        return jsonify({"error": "Conexiune la robot eșuată"}), 500
-
-    try:
-        # Obține serviciul ALMotion
-        motion_service = session.service("ALMotion")
-
-        # Obține accelerația actuală a robotului
-        acceleration = motion_service.getRobotAcceleration()
-
-        return jsonify({
-            "linear_acceleration": acceleration[0],
-            "angular_acceleration": acceleration[1]
         })
 
     except Exception as e:
