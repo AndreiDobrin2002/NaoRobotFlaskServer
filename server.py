@@ -101,7 +101,7 @@ def speak():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/sensors", methods=["GET"])
+@app.route("/battery", methods=["GET"])
 def sensors():
     """
     Citește informațiile de la senzorii robotului.
@@ -112,12 +112,44 @@ def sensors():
     try:
         memory_service = session.service("ALMemory")
         battery = memory_service.getData("Device/SubDeviceList/Battery/Charge/Sensor/Value")
-        touch_head = memory_service.getData("Device/SubDeviceList/Head/Touch/Front/Sensor/Value")
 
         return jsonify({
-            "battery_level": battery,
-            "touch_head": "pressed" if touch_head > 0.5 else "not_pressed"
+            "battery_level": battery
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/all_sensors", methods=["GET"])
+def all_sensors():
+    """
+    Returnează starea tuturor senzorilor de pe robotul NAO.
+    """
+    if not session:
+        return jsonify({"error": "Conexiune la robot eșuată"}), 500
+
+    try:
+        memory_service = session.service("ALMemory")
+
+        # Lista senzorilor de interes
+        sensors = {
+            "battery": "Device/SubDeviceList/Battery/Charge/Sensor/Value",
+            "touch_head_front": "Device/SubDeviceList/Head/Touch/Front/Sensor/Value",
+            "touch_head_middle": "Device/SubDeviceList/Head/Touch/Middle/Sensor/Value",
+            "touch_head_rear": "Device/SubDeviceList/Head/Touch/Rear/Sensor/Value",
+            "left_hand_touch": "Device/SubDeviceList/LHand/Touch/Back/Sensor/Value",
+            "right_hand_touch": "Device/SubDeviceList/RHand/Touch/Back/Sensor/Value",
+            "left_foot_bumper": "Device/SubDeviceList/LFoot/Bumper/Left/Sensor/Value",
+            "right_foot_bumper": "Device/SubDeviceList/RFoot/Bumper/Right/Sensor/Value",
+            "sonar_left": "Device/SubDeviceList/US/Left/Sensor/Value",
+            "sonar_right": "Device/SubDeviceList/US/Right/Sensor/Value"
+        }
+
+        sensor_data = {}
+        for sensor_name, sensor_path in sensors.items():
+            sensor_data[sensor_name] = memory_service.getData(sensor_path)
+
+        return jsonify(sensor_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
