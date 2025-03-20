@@ -39,6 +39,39 @@ def index():
     return "Serverul API NAO este activ!"
 
 
+# Creează proxy pentru modul audio al robotului
+audio_proxy = ALProxy("ALAudioDevice", NAO_IP, NAO_PORT)
+
+@app.route('/set_volume', methods=['POST'])
+def set_volume():
+    try:
+        # Obține volumul din corpul cererii
+        data = request.json
+        if 'volume' in data:
+            volume = data['volume']
+
+            # Asigură-te că volumul este în intervalul 0-100
+            if 0 <= volume <= 100:
+                # Setează volumul robotului
+                audio_proxy.setOutputVolume(volume)
+                return jsonify({"message": "Volumul robotului a fost setat la {volume}%"}), 200
+            else:
+                return jsonify({"error": "Volumul trebuie să fie între 0 și 100"}), 400
+        else:
+            return jsonify({"error": "Parametru 'volume' lipsă"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/get_volume', methods=['GET'])
+def get_volume():
+    try:
+        current_volume = audio_proxy.getOutputVolume()
+        return jsonify({"volume": current_volume}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/move", methods=["POST"])
 def move():
     if not session:
