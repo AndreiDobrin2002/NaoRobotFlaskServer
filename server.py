@@ -11,6 +11,7 @@ from werkzeug.utils import secure_filename
 import paramiko  # Pentru transferul fișierelor către robot
 import pygame
 import requests
+import json
 from flask_cors import CORS
 
 
@@ -994,6 +995,52 @@ def stop_manual_control():
 
     return jsonify({"message": "Control manual a fost oprit"}), 200
 
+
+tts = ALProxy("ALTextToSpeech", NAO_IP, NAO_PORT)
+# Endpoint LM Studio
+LM_STUDIO_URL = "http://127.0.0.1:1234/v1/chat/completions"
+HEADERS = {"Content-Type": "application/json"}
+
+# Endpoint pentru a pune o întrebare
+@app.route('/ask', methods=['POST'])
+def ask_nao():
+    try:
+        data = request.get_json()
+        question = data.get("question", "")
+
+        if not question:
+            return jsonify({"error": "No question provided"}), 400
+
+        # Construim payload-ul pentru LM Studio
+        payload = {
+            "messages": [
+                {"role": "user", "content": question}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 512
+        }
+
+        # Trimitem cererea către LM Studio
+        response = requests.post(LM_STUDIO_URL, headers=HEADERS, data=json.dumps(payload))
+        if response.status_code != 200:
+            return jsonify({"error": "LLM request failed"}), 500
+
+        result = response.json()
+        full_answer = result["choices"][0]["message"]["content"]
+
+        # Extrage doar ce e după </think>
+        if "</think>" in full_answer:
+            answer = full_answer.split("</think>", 1)[1].strip()
+        else:
+            answer = full_answer.strip()
+
+        # NAO rostește răspunsul
+        tts.say(answer.encode('utf-8'))
+
+        return jsonify({"answer": answer})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # try:
 #     behavior_manager = session.service("ALBehaviorManager")
