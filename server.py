@@ -1042,6 +1042,29 @@ def ask_nao():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/stop_all', methods=['POST'])
+def stop_all():
+    try:
+        # Oprește mișcarea
+        motion = ALProxy("ALMotion", NAO_IP, NAO_PORT)
+        if motion.moveIsActive():
+            motion.stopMove()
+        motion.rest()  # Pune robotul într-o poziție sigură
+
+        # Oprește toate sunetele
+        audio = ALProxy("ALAudioPlayer", NAO_IP, NAO_PORT)
+        audio.stopAll()
+
+        # Nu există stopAll în ALTextToSpeech, dar putem reduce volumul ca workaround
+        tts = ALProxy("ALTextToSpeech", NAO_IP, NAO_PORT)
+        tts.setVolume(1.0)
+
+        return jsonify({"status": "success", "message": "Mișcările și sunetele au fost oprite"}), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # try:
 #     behavior_manager = session.service("ALBehaviorManager")
 #     installed_behaviors = behavior_manager.getInstalledBehaviors()
