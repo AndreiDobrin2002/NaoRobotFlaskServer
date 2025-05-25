@@ -1049,15 +1049,14 @@ def stop_all():
         motion = ALProxy("ALMotion", NAO_IP, NAO_PORT)
         if motion.moveIsActive():
             motion.stopMove()
-        motion.rest()  # Pune robotul într-o poziție sigură
+            motion.rest()  # Pune robotul într-o poziție sigură
 
         # Oprește toate sunetele
         audio = ALProxy("ALAudioPlayer", NAO_IP, NAO_PORT)
         audio.stopAll()
 
-        # Nu există stopAll în ALTextToSpeech, dar putem reduce volumul ca workaround
         tts = ALProxy("ALTextToSpeech", NAO_IP, NAO_PORT)
-        tts.setVolume(1.0)
+        tts.stopAll()
 
         return jsonify({"status": "success", "message": "Mișcările și sunetele au fost oprite"}), 200
 
