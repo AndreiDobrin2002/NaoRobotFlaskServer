@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+import webbrowser
+
 import qi
 from naoqi import ALProxy
 import numpy as np
 import cv2
 import threading
 import time
-from flask import Flask, request, jsonify, Response, send_file
+from flask import Flask, request, jsonify, Response, send_file, send_from_directory
 import os
 from werkzeug.utils import secure_filename
 import paramiko  # Pentru transferul fișierelor către robot
@@ -22,7 +24,7 @@ ROBOT_PASSWORD = "nao"  # Setează parola corectă
 ROBOT_AUDIO_PATH = "/home/nao/audio/"  # Director unde salvăm fișierele pe robot
 
 # Inițializăm Flask
-app = Flask(__name__)
+app = Flask(__name__, static_folder='build')
 CORS(app)  # ✅ Activează accesul din React
 
 # Configurăm sesiunea cu robotul
@@ -35,9 +37,12 @@ except Exception as e:
     session = None
 
 
-@app.route("/")
-def index():
-    return "Serverul API NAO este activ!"
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, 'index.html')
 
 
 # Creează proxy pentru modul audio al robotului
@@ -1073,5 +1078,6 @@ def stop_all():
 
 
 if __name__ == "__main__":
+    webbrowser.open_new('http://localhost:5000')
     # Pornim serverul Flask pe portul 5000
     app.run(host="0.0.0.0", port=5000)
