@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import webbrowser
-
 import qi
 from naoqi import ALProxy
 import numpy as np
@@ -15,6 +13,7 @@ import pygame
 import requests
 import json
 from flask_cors import CORS
+import webbrowser
 
 
 NAO_IP = "192.168.0.1"  # Adresa IP a robotului
