@@ -308,7 +308,7 @@ def wipe_forehead():
 
 
 @app.route("/headbang", methods=["POST"])
-def clap():
+def headbang():
     """
     Face robotul să dea din cap ca la rock.
     """
@@ -423,7 +423,13 @@ def set_eye_color():
         else:
             return jsonify({"error": "Valoare invalidă pentru 'eye'. Trebuie să fie 'left', 'right' sau 'both'."}), 400
 
-        return jsonify({"status": "Culoarea ochilor {eye} a fost schimbată la {color}"}), 200
+        if eye == "both":
+            return jsonify({"status": "Culoarea ambilor ochi a fost schimbată la "+str(color)}), 200
+        elif eye == "left":
+            return jsonify({"status": "Culoarea ochiului stang a fost schimbată la "+str(color)}), 200
+        elif eye == "right":
+            return jsonify({"status": "Culoarea ochiului drept a fost schimbată la "+str(color)}), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
